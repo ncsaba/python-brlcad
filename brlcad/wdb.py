@@ -3,13 +3,18 @@ Python wrapper for libwdb adapting python types to the needed ctypes structures.
 """
 import fnmatch
 import brlcad._bindings.libwdb as libwdb
+import brlcad._bindings.libbu as libbu
+import brlcad._bindings.libbn as libbn
+import brlcad._bindings.librt as librt
 from brlcad.vmath import Transform
 import os
+import ctypes
 from brlcad.util import check_missing_params
 import brlcad.ctypes_adaptors as cta
 from brlcad.exceptions import BRLCADException
 import brlcad.primitives.table as p_table
 import brlcad.primitives as primitives
+
 
 # This is unfortunately needed because the original signature
 # has an array of doubles and ctpyes refuses to take None as value for that
@@ -156,6 +161,34 @@ class WDB:
     def arb8(self, name, points=(1, 1, -1, 1, -1, -1, -1, -1, -1, -1, 1, -1, 1, 1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1)):
         libwdb.mk_arb8(self.db_fp, name, cta.doubles(points, double_count=24))
 
+    @mk_wrap_primitive(primitives.DSP)
+    def dsp(self, name, dsp_name, data_src=1, width=142, length=150, interpolation=False, cut_direction=1, cell_size=1,
+            unit_elevation=0.005):
+        d = cta.brlcad_new(libwdb.struct_rt_dsp_internal, calloc=True)
+        d.magic = libwdb.RT_DSP_INTERNAL_MAGIC
+        d.dsp_name = cta.str_to_vls(dsp_name)
+        if data_src == 1:
+            d.dsp_datasrc = libwdb.RT_DSP_SRC_FILE
+        elif data_src == 2:
+            d.dsp_datasrc = libwdb.RT_DSP_SRC_OBJ
+        d.dsp_xcnt = width
+        d.dsp_ycnt = length
+        if interpolation:
+            d.dsp_smooth = 1
+        else:
+            d.dsp_smooth = 0
+        if cut_direction == 1:
+            d.dsp_cuttype = ord(libwdb.DSP_CUT_DIR_ADAPT)
+        elif cut_direction == 2:
+            d.dsp_cuttype = ord(libwdb.DSP_CUT_DIR_llUR)
+        elif cut_direction == 3:
+            d.dsp_cuttype = ord(libwdb.DSP_CUT_DIR_ULlr)
+        cta.MAT_IDN(d.dsp_stom)
+        d.dsp_stom[0] = d.dsp_stom[5] = cell_size
+        d.dsp_stom[10] = unit_elevation
+        libbn.bn_mat_inv(d.dsp_mtos, d.dsp_stom)
+        libwdb.wdb_export(self.db_fp, name, libwdb.byref(d), libwdb.ID_DSP, 1)
+
     @mk_wrap_primitive(primitives.Ellipsoid)
     def ellipsoid(self, name, center=(0, 0, 0), a=(1, 0, 0), b=(0, 1, 0), c=(0, 0, 1)):
         libwdb.mk_ell(self.db_fp, name, cta.point(center), cta.direction(a), cta.direction(b), cta.direction(c))
@@ -186,6 +219,46 @@ class WDB:
             mat=Transform.unit()):
         libwdb.mk_vol(self.db_fp, name, file_name, x_dim, y_dim, z_dim, low_thresh, high_thresh,
                       cta.point(cell_size), cta.transform(mat))
+
+    @mk_wrap_primitive(primitives.EBM)
+    def ebm(self, name, file_name, x_dim=350, y_dim=350, tallness=20, mat=Transform.unit()):
+        libwdb.mk_ebm(self.db_fp, name, file_name, x_dim, y_dim, tallness, cta.transform(mat))
+
+    @mk_wrap_primitive(primitives.ARS)
+    def ars(self, name, curves):
+        ncurves = len(curves)
+        pts_per_curve = len(cta.flatten_numbers(curves[1]))/3
+        mod_curves  = [[None for x in range(pts_per_curve*3)] for y in range(ncurves)]
+        ## for start
+        for i in range(pts_per_curve):
+            for j in range(3):
+                mod_curves[0][3*i+j] = curves[0][j]
+        ##for other curves
+        for i in range(1,ncurves-1):
+            for j in range(3*pts_per_curve):
+                mod_curves[i][j] = curves[i][j]
+        ## for end
+        for i in range(pts_per_curve):
+            for j in range(3):
+                mod_curves[ncurves-1][3*i+j] = curves[ncurves-1][j]
+
+        libwdb.mk_ars(self.db_fp, name, ncurves, pts_per_curve, cta.array2d(mod_curves, use_brlcad_malloc=True))
+
+    @mk_wrap_primitive(primitives.Superell)
+    def superell(self, name, center=(0, 0, 0), a=(1, 0, 0), b=(0, 1, 0), c=(0, 0, 1), n=0, e=0):
+        s = cta.brlcad_new(libwdb.struct_rt_superell_internal)
+        s.magic = libwdb.RT_SUPERELL_INTERNAL_MAGIC
+        s.v = cta.point(center)
+        s.a = cta.point(a)
+        s.b = cta.point(b)
+        s.c = cta.point(c)
+        s.e = e
+        s.n = n
+        libwdb.wdb_export(self.db_fp, name, libwdb.byref(s), libwdb.ID_SUPERELL, 1)
+
+    @mk_wrap_primitive(primitives.Half)
+    def half(self, name, norm=(1, 0, 0), d=1.0):
+        libwdb.mk_half(self.db_fp, name, cta.point(norm), d)
 
     @mk_wrap_primitive(primitives.RPC)
     def rpc(self, name, base=(0, 0, 0), height=(-1, 0, 0), breadth=(0, 0, 1), half_width=0.5):
@@ -226,6 +299,10 @@ class WDB:
     def particle(self, name, base=(0, 0, 0), height=(0, 0, 1), r_base=0.5, r_end=0.2):
         libwdb.mk_particle(self.db_fp, name, cta.point(base), cta.direction(height), r_base, r_end)
 
+    @mk_wrap_primitive(primitives.Grip)
+    def grip(self, name, center=(0, 0, 0), normal=(1, 0, 0), magnitude=1):
+        libwdb.mk_grip(self.db_fp, name, cta.point(center, 3), cta.point(normal, 3), magnitude)
+
     @mk_wrap_primitive(primitives.Pipe)
     def pipe(self, name, points=(((0, 0, 0), 0.5, 0.3, 1), ((0, 0, 1), 0.5, 0.3, 1))):
         """
@@ -236,6 +313,23 @@ class WDB:
         for pipe_point in points:
             libwdb.mk_add_pipe_pt(seg_list, cta.point(pipe_point[0]), *pipe_point[1:])
         libwdb.mk_pipe(self.db_fp, name, seg_list)
+
+    @mk_wrap_primitive(primitives.Metaball)
+    def metaball(self, name, points=(((1, 1, 1), 1, 0), ((0, 0, 1), 2, 0)), threshold=1, method=2):
+        """
+        ctrl_points: corresponds to metaball control points
+               ctrl_point = (point, field_strength, sweat)
+        """
+        if method <0 or threshold <= 0:
+            raise BRLCADException("Invalid Arguments")
+        m = cta.brlcad_new(libwdb.struct_rt_metaball_internal)
+        m.magic = libwdb.RT_METABALL_INTERNAL_MAGIC
+        m.threshold = threshold
+        m.method = method
+        cta.list_init(m.metaball_ctrl_head)
+        for point in points:
+            librt.rt_metaball_add_point(libwdb.byref(m), cta.doubles(cta.flatten_numbers(point[0])), point[1], point[2])
+        libwdb.wdb_export(self.db_fp, name, libwdb.byref(m), libwdb.ID_METABALL, 1)
 
     @mk_wrap_primitive(primitives.Sketch)
     def sketch(self, name, sketch=None):
@@ -250,6 +344,22 @@ class WDB:
         si.vert_count = len(vertices)
         si.verts = cta.points2D(vertices, point_count=len(vertices))
         libwdb.mk_sketch(self.db_fp, name, libwdb.byref(si))
+
+    @mk_wrap_primitive(primitives.BOT)
+    def bot(self, name, mode=3, orientation=1, flags=0, vertices=[[0, 0, 0], [0, 0, 1], [0, 1, 0], [1, 0, 0]],
+                 faces = [[0, 1, 2], [1, 2, 3], [3, 1, 0]], thickness=[2, 3, 1], face_mode=[True, True, False]):
+        face_mode_struct = 0
+        if mode == 3:
+            face_mode_struct=libbu.bu_bitv_new(len(faces))
+            for i in range(len(faces)):
+                if face_mode[i]:
+                    cta.bit_set(face_mode_struct, i)
+        libwdb.mk_bot(self.db_fp, name, mode, orientation, flags, len(vertices), len(faces), cta.doubles(vertices),
+                      cta.integers(faces), cta.doubles(thickness), face_mode_struct)
+
+    @mk_wrap_primitive(primitives.Submodel)
+    def submodel(self, name, file_name, treetop, method=1):
+        libwdb.mk_submodel(self.db_fp, name, file_name, treetop, method)
 
     @mk_wrap_primitive(primitives.Extrude)
     def extrude(self, name, sketch=None, base=None, height=None, u_vec=None, v_vec=None):

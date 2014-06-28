@@ -21,6 +21,7 @@ class WDBTestCase(unittest.TestCase):
             brl_db.rpp("rpp.s")
             brl_db.wedge("wedge.s")
             brl_db.arb4("arb4.s")
+            brl_db.dsp("dsp.s", "resources/Ex1.dsp")
             brl_db.arb5("arb5.s")
             brl_db.arb6("arb6.s")
             brl_db.arb7("arb7.s")
@@ -31,6 +32,7 @@ class WDBTestCase(unittest.TestCase):
             brl_db.tgc("tgc.s")
             brl_db.cone("cone.s")
             brl_db.trc("trc.s")
+            brl_db.submodel("submodel.s", "resources/test_submodel.g", "my_bot")
             brl_db.rpc("rpc.s")
             brl_db.rhc("rhc.s")
             brl_db.epa("epa.s")
@@ -39,8 +41,19 @@ class WDBTestCase(unittest.TestCase):
             brl_db.eto("eto.s")
             brl_db.arbn("arbn.s")
             brl_db.particle("particle.s")
+            brl_db.grip("grip.s")
             brl_db.pipe("pipe.s")
-            brl_db.vol("vol.s", "tests/resources/voxel.data")
+            brl_db.vol("vol.s", "resources/voxel.data")
+            brl_db.metaball("metaball.s")
+            brl_db.half("half.s")
+            brl_db.ebm("ebm.s", "resources/Ychar.bw")
+            brl_db.ars("ars.s", [[0, 0, 3],
+                             [1, 1, 3, 1, -1, 3, -1, -1, 3, -1, 1, 3],
+                             [1, 1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1],
+                             [1, 0, -1, 0, -1, -1, -1, 0, -1, 0, 1, -1],
+                             [1, 0, -3, 0, -1, -3, -1, 0, -3, 0, 1, -3 ],
+                             [0, 0, -3]])
+            brl_db.superell("superell.s")
             test_comb = primitives.Combination(name="combination.c")
             for shape_name in brl_db.ls():
                 test_comb.tree.add_child(shape_name)
@@ -106,6 +119,11 @@ class WDBTestCase(unittest.TestCase):
         self.assertTrue(shape.center.is_same((0, 0, 0)))
         self.assertEqual(1, shape.radius)
 
+    def test_ebm_defaults(self):
+        shape = self.lookup_shape("ebm.s")
+        expected = primitives.EBM("ebm.s", "resources/Ychar.bw")
+        self.assertTrue(expected.has_same_data(shape))
+
     def test_ellipsoid_defaults(self):
         shape = self.lookup_shape("ellipsoid.s")
         self.assertTrue(shape.center.is_same((0, 0, 0)))
@@ -131,9 +149,43 @@ class WDBTestCase(unittest.TestCase):
 
     def test_vol_defaults(self):
         shape = self.lookup_shape("vol.s")
-        expected = primitives.VOL("vol.s", "tests/resources/voxel.data")
+        expected = primitives.VOL("vol.s", "resources/voxel.data")
         self.assertTrue(expected.has_same_data(shape))
 
+    def test_superell_defaults(self):
+        shape = self.lookup_shape("superell.s")
+        expected = primitives.Superell("superell.s")
+        self.assertTrue(expected.has_same_data(shape))
+
+    def test_grip_defaults(self):
+        shape = self.lookup_shape("grip.s")
+        expected = primitives.Grip("grip.s")
+        self.assertTrue(expected.has_same_data(shape))
+
+    def test_metaball_defaults(self):
+        shape = self.lookup_shape("metaball.s")
+        expected = primitives.Metaball("metaball.s")
+        self.assertTrue(expected.has_same_data(shape))
+
+    def test_half_defaults(self):
+        shape = self.lookup_shape("half.s")
+        expected = primitives.Half("half.s")
+        self.assertTrue(expected.has_same_data(shape))
+
+    def test_submodel_defaults(self):
+        shape = self.lookup_shape("submodel.s")
+        expected = primitives.Submodel("submodel.s", "resources/test_submodel.g", "my_bot")
+        self.assertTrue(expected.has_same_data(shape))
+
+    def test_ars_defaults(self):
+        shape = self.lookup_shape("ars.s")
+        expected = primitives.ARS("ars.s",  [[0, 0, 3],
+                                             [1, 1, 3, 1, -1, 3, -1, -1, 3, -1, 1, 3],
+                                             [1, 1, 1, 1, -1, 1, -1, -1, 1, -1, 1, 1],
+                                             [1, 0, -1, 0, -1, -1, -1, 0, -1, 0, 1, -1],
+                                             [1, 0, -3, 0, -1, -3, -1, 0, -3, 0, 1, -3 ],
+                                             [0, 0, -3]])
+        self.assertTrue(expected.has_same_data(shape))
 
     def test_rcc_defaults(self):
         self.check_tgc("rcc.s", "0, 0, 0, 0, 0, 1, 0, -1, 0, -1, 0, 0, 0, -1, 0, -1, 0, 0")
@@ -198,6 +250,11 @@ class WDBTestCase(unittest.TestCase):
         shape = self.lookup_shape("pipe.s")
         expected = primitives.Pipe("pipe.s")
         self.assertTrue(expected.is_same(shape))
+
+    def test_dsp_defaults(self):
+        shape = self.lookup_shape("dsp.s")
+        expected = primitives.DSP("dsp.s", "resources/Ex1.dsp")
+        self.assertTrue(expected.has_same_data(shape))
 
     def test_save_primitives(self):
         test_shape_name = "test_save.s"
